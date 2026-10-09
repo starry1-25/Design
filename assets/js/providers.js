@@ -245,6 +245,10 @@
   }
 
   async function doTest() {
+    if (!ui.hasLocalBackend()) {
+      ui.toast('静态预览部署无法测试连接，请在本机运行后端服务', 'info');
+      return;
+    }
     const payload = gather();
     // 编辑已有接入且未重填密钥时，让服务端用已保存的密钥来测
     if (state.editingId && !payload.apiKey) {
@@ -261,6 +265,10 @@
 
   async function doSave() {
     if (state.busy) return;
+    if (!ui.hasLocalBackend()) {
+      ui.toast('静态预览部署无法保存接入配置，请在本机运行后端服务', 'info');
+      return;
+    }
     const payload = gather();
     const problem = validate(payload);
     if (problem) { setStatus(problem, 'err'); ui.toast(problem, 'err'); return; }

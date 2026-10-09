@@ -172,6 +172,8 @@
 
   async function pingServer() {
     if (location.protocol === 'file:') return false;
+    // 静态托管（GitHub Pages 等）没有后端，不必也不该发探测请求
+    if (!hasLocalBackend()) return false;
     try {
       await HZ.api.health();
       clearOfflineBar();

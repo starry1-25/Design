@@ -131,14 +131,16 @@
 
     loadPrefs();
 
-    // 岗位列表优先取服务端
-    api.roles().then((d) => {
-      if (d && d.roles && d.roles.length) {
-        roles = d.roles;
-        if (d.ratios && d.ratios.length) ratios = d.ratios;
-      }
-      renderPrefs();
-    }).catch(() => { renderPrefs(); });
+    // 岗位列表优先取服务端（静态托管下没有后端，直接用内置列表）
+    if (ui.hasLocalBackend()) {
+      api.roles().then((d) => {
+        if (d && d.roles && d.roles.length) {
+          roles = d.roles;
+          if (d.ratios && d.ratios.length) ratios = d.ratios;
+        }
+        renderPrefs();
+      }).catch(() => { renderPrefs(); });
+    }
 
     renderPrefs();
     bindPrefs();
