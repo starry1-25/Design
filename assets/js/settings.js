@@ -83,10 +83,10 @@
       live.classList.add('is-warn');
       live.innerHTML = '<i aria-hidden="true"></i> 静态预览';
       $('#svcVersion').textContent = '静态部署';
-      $('#svcCount').textContent = '—';
-      $('#svcChat').textContent = '静态部署不可用';
-      $('#svcImage').textContent = '静态部署不可用';
-      $('#svcReady').textContent = '需在本机运行后端服务';
+      $('#svcProvider').textContent = 'Agnes AI';
+      $('#svcChat').textContent = '需在本机运行后端';
+      $('#svcImage').textContent = '需在本机运行后端';
+      $('#svcReady').textContent = '静态部署不可用';
       ui.offlineBar(ui.STATIC_NOTICE);
       return;
     }
@@ -96,18 +96,18 @@
       live.classList.remove('is-off');
       live.innerHTML = '<i aria-hidden="true"></i> 正常';
       $('#svcVersion').textContent = 'v' + (h.version || '—');
-      $('#svcCount').textContent = (h.providerCount || 0) + ' 个';
+      $('#svcProvider').textContent = h.provider || 'Agnes AI';
       $('#svcChat').textContent = describe(h.chat);
       $('#svcImage').textContent = describe(h.image);
-      $('#svcReady').textContent = h.configured ? '就绪，可以生成' : '待配置，请先接入模型';
+      $('#svcReady').textContent = h.configured ? '就绪，可以生成视觉稿' : '服务端未配置 API 密钥';
     } catch (_) {
       live.classList.add('is-off');
       live.innerHTML = '<i aria-hidden="true"></i> 未连接';
-      ['#svcVersion', '#svcCount', '#svcChat', '#svcImage', '#svcReady'].forEach((s) => {
+      ['#svcVersion', '#svcProvider', '#svcChat', '#svcImage', '#svcReady'].forEach((s) => {
         const el = $(s);
         if (el) el.textContent = '—';
       });
-      ui.offlineBar('本地服务未响应，请先运行 <strong>server.ps1</strong> 后再刷新页面。');
+      ui.offlineBar('本地服务未响应，请先运行 <strong>start.ps1</strong> 后再刷新页面。');
     }
   }
 
@@ -151,9 +151,6 @@
       renderPrefs();
       ui.toast('已重置本机偏好', 'ok');
     });
-
-    // 接入配置发生增删改或切换后，运行状态卡片需要同步刷新
-    document.addEventListener('hz:providers-changed', loadHealth);
 
     loadHealth();
     loadData();

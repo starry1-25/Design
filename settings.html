@@ -39,84 +39,16 @@
 
   <section class="wrap">
     <div class="grid-2">
-
-      <!-- ============================================ 大模型接入配置 -->
-      <div class="card" id="llmCard">
-        <div class="card-head">
-          <div>
-            <h3>大模型接入配置</h3>
-            <p>支持任意兼容 OpenAI 协议的大模型服务。密钥经 Windows DPAPI 加密后仅保存在本机，不会随项目上传。</p>
-          </div>
-          <button class="btn is-primary" type="button" id="addProvider">
-            <span data-icon="plus"></span><span>添加模型接入</span>
-          </button>
-        </div>
-
-        <div class="prov-list" id="provList"></div>
-
-        <!-- 新增 / 编辑表单 -->
-        <div class="prov-form is-hidden" id="provForm">
-          <div class="pf-title" id="pfTitle">添加模型接入</div>
-
-          <div class="pf-grid">
-            <label class="field">
-              <span class="field-label">名称</span>
-              <input type="text" id="pfName" autocomplete="off" placeholder="例如：公司网关 / OpenAI / 本地 Ollama">
-            </label>
-
-            <label class="field">
-              <span class="field-label">API 地址 <em>*</em></span>
-              <input type="text" id="pfBaseUrl" autocomplete="off" spellcheck="false"
-                     placeholder="https://api.openai.com/v1">
-              <span class="field-hint">要填到版本号为止，例如 <code>…/v1</code></span>
-            </label>
-
-            <label class="field">
-              <span class="field-label">API 密钥 <em>*</em></span>
-              <input type="password" id="pfApiKey" autocomplete="new-password" spellcheck="false"
-                     placeholder="sk-…">
-              <span class="field-hint" id="pfKeyHint">仅加密保存在本机</span>
-            </label>
-
-            <label class="field">
-              <span class="field-label">文本模型标识</span>
-              <input type="text" id="pfChatModel" autocomplete="off" spellcheck="false"
-                     placeholder="gpt-4o-mini">
-              <span class="field-hint">用于需求解析与多轮微调</span>
-            </label>
-
-            <label class="field">
-              <span class="field-label">图像模型标识</span>
-              <input type="text" id="pfImageModel" autocomplete="off" spellcheck="false"
-                     placeholder="gpt-image-1 / dall-e-3">
-              <span class="field-hint">用于出图，需支持 <code>/images/generations</code></span>
-            </label>
-          </div>
-
-          <div class="pf-actions">
-            <button class="btn" type="button" id="pfTest">
-              <span data-icon="plug"></span><span>测试连接</span></button>
-            <button class="btn is-primary" type="button" id="pfSave">
-              <span data-icon="check"></span><span>保存</span></button>
-            <button class="btn is-ghost" type="button" id="pfCancel">
-              <span data-icon="close"></span><span>取消</span></button>
-            <span class="pf-status" id="pfStatus"></span>
-          </div>
-
-          <div class="pf-result is-hidden" id="pfResult"></div>
-        </div>
-      </div>
-
       <!-- ============================================ 运行状态 -->
       <div class="card">
         <h3>运行状态</h3>
-        <p>当前实际生效的模型由上方「已启用」的接入决定。</p>
+        <p>AI 能力由服务端统一提供的 Agnes AI 服务承载，本页无需做任何配置。</p>
         <div class="setting-row">
           <span class="label">本地服务</span>
           <span class="live" id="svcLive"><i aria-hidden="true"></i> 检测中…</span>
         </div>
         <div class="setting-row"><span class="label">服务版本</span><span class="value" id="svcVersion">—</span></div>
-        <div class="setting-row"><span class="label">已保存接入</span><span class="value" id="svcCount">—</span></div>
+        <div class="setting-row"><span class="label">AI 服务</span><span class="value" id="svcProvider">—</span></div>
         <div class="setting-row"><span class="label">文本模型</span><span class="value" id="svcChat">—</span></div>
         <div class="setting-row"><span class="label">图像模型</span><span class="value" id="svcImage">—</span></div>
         <div class="setting-row"><span class="label">可用状态</span><span class="value" id="svcReady">—</span></div>
@@ -146,14 +78,10 @@
       <!-- ============================================ 数据管理 -->
       <div class="card">
         <h3>数据管理</h3>
-        <p>历史记录、生成的图片与接入配置都保存在本地 <code>data/</code> 目录。</p>
+        <p>历史记录与生成的图片都保存在本地 <code>data/</code> 目录。</p>
         <div class="setting-row"><span class="label">历史记录数量</span><span class="value" id="dataCount">—</span></div>
         <div class="setting-row"><span class="label">记录存储位置</span><span class="value">data/records.json</span></div>
         <div class="setting-row"><span class="label">图片存储位置</span><span class="value">data/images/</span></div>
-        <div class="setting-row">
-          <span class="label">接入配置存储</span>
-          <span class="value">data/providers.dat（加密）</span>
-        </div>
         <div class="setting-row" style="gap:8px">
           <span class="label">管理历史</span>
           <a class="btn" href="history.html"><span data-icon="history"></span><span>前往历史记录</span></a>
@@ -209,7 +137,6 @@
 <script src="assets/js/icons.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/ui.js"></script>
-<script src="assets/js/providers.js"></script>
 <script src="assets/js/settings.js"></script>
 </body>
 </html>

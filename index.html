@@ -31,24 +31,6 @@
   </div>
 </header>
 
-<!-- 未接入大模型时的接入引导条：接入完成后自动隐藏，不阻塞任何基础操作 -->
-<div class="connect-bar is-hidden" id="connectBar" data-chat="0" data-image="0">
-  <div class="wrap connect-inner">
-    <span class="connect-ico" data-icon="plug" aria-hidden="true"></span>
-    <div class="connect-text">
-      <strong id="connectTitle">尚未接入大模型</strong>
-      <span id="connectDesc">接入后可解锁：需求智能解析 · 视觉稿生成 · 多轮对话微调</span>
-      <div class="connect-caps">
-        <span class="cap" data-cap="chat"><span data-icon="check" aria-hidden="true"></span>需求解析与多轮微调</span>
-        <span class="cap" data-cap="image"><span data-icon="check" aria-hidden="true"></span>视觉稿生成</span>
-      </div>
-    </div>
-    <a class="btn is-primary connect-cta" href="settings.html#llmCard">
-      <span data-icon="sliders"></span><span>立即接入</span>
-    </a>
-  </div>
-</div>
-
 <main class="page">
 
   <section class="hero wrap">
@@ -119,9 +101,9 @@
         <p class="section-sub">继续和 Agent 对话，直到满意为止</p>
       </div>
       <div class="section-head-right">
-        <button class="live is-warn" id="live" type="button" data-ready="0">
+        <span class="live" id="live" data-ready="0">
           <i aria-hidden="true"></i><span id="liveText">检测中…</span>
-        </button>
+        </span>
       </div>
     </div>
     <div class="result" id="result"></div>

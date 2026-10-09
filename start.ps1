@@ -111,12 +111,12 @@ function Show-Status {
     param($Health)
     Write-Host "  地址   : http://localhost:$Port/"
     Write-Host "  版本   : v$($Health.version)"
-    Write-Host "  已接入 : $($Health.providerCount) 个模型"
+    Write-Host "  AI服务 : $($Health.provider)"
     if ($Health.configured) {
         Write-Host "  文本模型: $($Health.chat.model)" -ForegroundColor Gray
         Write-Host "  图像模型: $($Health.image.model)" -ForegroundColor Gray
     } else {
-        Write-Host "  提示   : 还没有接入大模型，请打开 设置 页配置后再生成。" -ForegroundColor Yellow
+        Write-Host "  提示   : 服务端缺少 Agnes AI 密钥，请在 .env 中设置 AGNES_API_KEY 后重启。" -ForegroundColor Yellow
     }
 }
 

@@ -254,24 +254,20 @@
     const isSetup = api.isSetupError(err);
 
     const actions = isSetup
-      ? '<a class="btn is-primary" href="settings.html#llmCard">' +
-          '<span data-icon="sliders"></span><span>前往接入大模型</span></a>' +
-        '<button class="btn" type="button" data-act="recheck">' +
+      ? '<button class="btn is-primary" type="button" data-act="recheck">' +
           '<span data-icon="refresh"></span><span>重新检测</span></button>'
       : '<button class="btn is-primary" type="button" data-act="retry">' +
           '<span data-icon="refresh"></span><span>' + (canRetryRender ? '只重新出图' : '重试一次') + '</span></button>' +
         '<button class="btn" type="button" data-act="regen">' +
           '<span data-icon="bolt"></span><span>换个方向重生成</span></button>';
 
-    // 说清楚「缺什么、接入后能解锁什么、什么现在就能用」
+    // 服务端没配密钥属部署侧问题，说明清楚即可，不提供任何配置入口
     const needList = isSetup
       ? '<ul class="need-list">' +
           '<li><span class="need-ico ok" data-icon="check"></span>' +
-            '<span><b>现在就能用</b>：岗位选择、填入示例、浏览示例预览、历史记录、接入配置</span></li>' +
+            '<span><b>现在就能用</b>：岗位选择、填入示例、浏览示例预览、历史记录</span></li>' +
           '<li><span class="need-ico todo" data-icon="plug"></span>' +
-            '<span><b>需求智能解析</b>、<b>多轮对话微调</b> —— 需要接入「文本模型」</span></li>' +
-          '<li><span class="need-ico todo" data-icon="plug"></span>' +
-            '<span><b>视觉稿生成</b>（本区域等待的能力）—— 需要接入「图像模型」</span></li>' +
+            '<span><b>需求解析、多轮微调与视觉稿生成</b> —— 服务端配置好 Agnes AI 密钥后会自动恢复</span></li>' +
         '</ul>'
       : '';
 
@@ -283,7 +279,7 @@
       }) +
       '<div class="canvas"><div class="canvas-stage"><div class="empty">' +
         '<div class="empty-ico" data-icon="' + (isSetup ? 'plug' : 'alert') + '"></div>' +
-        '<h3>' + (isSetup ? '生成视觉稿还需要接入大模型' : '这次没能生成成功') + '</h3>' +
+        '<h3>' + (isSetup ? 'AI 服务暂时不可用' : '这次没能生成成功') + '</h3>' +
         '<p>' + ui.esc(msg) + '</p>' +
         needList +
         '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">' + actions + '</div>' +
@@ -700,28 +696,8 @@
     els.generate.addEventListener('click', generate);
   }
 
-  /* --------------------------------------------- 模型就绪状态（纯展示，不阻塞） */
-  /* 这里只负责"告诉用户现在能用什么"。任何一步失败都不影响已经渲染好的界面。 */
-  function setConnectBar(o) {
-    if (!els.connectBar) return;
-    if (!o.visible) { els.connectBar.classList.add('is-hidden'); return; }
-
-    els.connectBar.classList.remove('is-hidden');
-    els.connectBar.dataset.chat = o.chat ? '1' : '0';
-    els.connectBar.dataset.image = o.image ? '1' : '0';
-
-    if (o.chat && !o.image) {
-      els.connectTitle.textContent = '还缺图像模型';
-      els.connectDesc.textContent = '文本模型已就绪，补上图像模型后即可生成视觉稿。';
-    } else if (!o.chat && o.image) {
-      els.connectTitle.textContent = '还缺文本模型';
-      els.connectDesc.textContent = '图像模型已就绪，补上文本模型后即可解析需求并出图。';
-    } else {
-      els.connectTitle.textContent = '尚未接入大模型';
-      els.connectDesc.textContent = '接入后可解锁：需求智能解析 · 视觉稿生成 · 多轮对话微调';
-    }
-  }
-
+  /* --------------------------------------------- 服务状态（纯展示，不阻塞） */
+  /* 只负责告诉用户现在能不能用；任何一步失败都不影响已渲染好的界面。 */
   async function refreshStatus() {
     // 静态托管（如 GitHub Pages）没有后端：不做注定失败的探测，直接如实说明。
     // 界面与交互此时依然完全可用，不受影响。
@@ -731,7 +707,6 @@
       els.live.dataset.ready = '0';
       ui.clearOfflineBar();
       ui.offlineBar(ui.STATIC_NOTICE);
-      setConnectBar({ visible: false });
       return;
     }
 
@@ -744,7 +719,6 @@
       els.liveText.textContent = '服务未连接';
       els.live.dataset.ready = '0';
       ui.offlineBar('本地服务未响应，请先运行 <strong>start.ps1</strong> 后再刷新页面。');
-      setConnectBar({ visible: false });
       return;
     }
 
@@ -755,23 +729,15 @@
 
     if (chat && image) {
       els.live.className = 'live is-on';
-      els.liveText.textContent = '已接入 · 可生成视觉稿';
+      els.liveText.textContent = 'AI Agent 在线';
       els.live.dataset.ready = '1';
-    } else if (chat) {
-      els.live.className = 'live is-warn';
-      els.liveText.textContent = '仅文本模型 · 无法出图';
-      els.live.dataset.ready = '0';
-    } else if (image) {
-      els.live.className = 'live is-warn';
-      els.liveText.textContent = '仅图像模型 · 无法解析需求';
-      els.live.dataset.ready = '0';
     } else {
+      // 服务在跑但没配密钥 —— 属部署侧问题，界面只如实说明，不提供配置入口
       els.live.className = 'live is-warn';
-      els.liveText.textContent = '未接入大模型';
+      els.liveText.textContent = '服务未就绪';
       els.live.dataset.ready = '0';
+      ui.offlineBar('AI 服务尚未就绪：服务端缺少 Agnes AI 密钥，请联系服务提供方。');
     }
-
-    setConnectBar({ visible: !(chat && image), chat: chat, image: image });
   }
 
   function init() {
@@ -785,9 +751,6 @@
     els.result = $('#result');
     els.live = $('#live');
     els.liveText = $('#liveText');
-    els.connectBar = $('#connectBar');
-    els.connectTitle = $('#connectTitle');
-    els.connectDesc = $('#connectDesc');
 
     // 顺序很重要：先把基础界面完整渲染出来，再去做模型状态探测，
     // 这样"打开网站即可操作"，模型有没有接入都不影响首屏。
@@ -804,16 +767,8 @@
 
     loadRoles().then(restoreSession);
 
-    // 未就绪时点状态胶囊可直接去接入页（静态部署下没有后端可配，改为说明）
-    els.live.addEventListener('click', () => {
-      if (els.live.dataset.ready === '1') return;
-      if (!ui.hasLocalBackend()) {
-        ui.toast('静态预览部署：AI 生成需在本机运行后端服务', 'info');
-        return;
-      }
-      location.href = 'settings.html#llmCard';
-    });
-    // 从设置页切回来时刷新一次（用户可能刚接入完模型）
+    // 状态胶囊只做展示，不再提供任何配置入口
+    // 从设置页切回来时刷新一次（万一服务端状态变了）
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) refreshStatus();
     });

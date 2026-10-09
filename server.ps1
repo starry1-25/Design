@@ -1,13 +1,13 @@
 # ==============================================================================
-#  HuiZhi AI  (绘职 AI)  -  Role-based Visual Agent  /  local backend
+#  HuiZhi AI  (HuiZhi)  -  Role-based Visual Agent  /  local backend
 #  Runtime : Windows PowerShell 5.1 + System.Net.HttpListener
-#  Purpose : static site host + user-configurable LLM gateway
+#  Purpose : static site host + Agnes AI gateway
 #            (chat planning, image generation, multi-turn refinement,
-#             history persistence, provider config with encrypted storage)
+#             history persistence)
 #
-#  This build has NO built-in model vendor. The user supplies any
-#  OpenAI-compatible endpoint from the Settings page; it is encrypted at rest
-#  with Windows DPAPI (scoped to the current user) in data/providers.dat.
+#  Model service is fixed to Agnes AI (OpenAI-compatible). There is no
+#  user-facing model configuration: credentials live in .env only, which is
+#  git-ignored, so the key is never published with the repository.
 #
 #  NOTE: This file is intentionally ASCII-only. All Chinese prompt engineering
 #        lives in data/roles.json and is read explicitly as UTF-8.
@@ -25,7 +25,6 @@ $ImgDir     = Join-Path $DataDir 'images'
 $LogDir     = Join-Path $Root 'logs'
 $RolesFile  = Join-Path $DataDir 'roles.json'
 $RecordFile = Join-Path $DataDir 'records.json'
-$ProviderFile = Join-Path $DataDir 'providers.dat'
 $EnvFile    = Join-Path $Root '.env'
 
 foreach ($d in @($DataDir, $ImgDir, $LogDir)) {
@@ -70,9 +69,17 @@ function Get-Cfg {
     return $Default
 }
 
+# ------------------------------------------------------------ Agnes AI config
+# Credentials come from .env (git-ignored) and are never written into source.
+$script:ApiKey     = Get-Cfg 'AGNES_API_KEY' ''
+$script:BaseUrl    = Get-Cfg 'AGNES_BASE_URL' 'https://api.agnes-ai.cn/v1'
+$script:TextModel  = Get-Cfg 'AGNES_TEXT_MODEL' 'agnes-3.0-flash'
+$script:ImageModel = Get-Cfg 'AGNES_IMAGE_MODEL' 'agnes-image-2.5-flash'
+$script:ImageModelFallback = Get-Cfg 'AGNES_IMAGE_MODEL_FALLBACK' 'agnes-image-2.1-flash'
+$script:MaxTokens  = [int](Get-Cfg 'AGNES_MAX_TOKENS' '4096')
+
 $script:Port      = [int](Get-Cfg 'PORT' '8230')
 $script:BindAll   = (Get-Cfg 'BIND_ALL' 'false') -eq 'true'
-$script:MaxTokens = [int](Get-Cfg 'LLM_MAX_TOKENS' '4096')
 
 # ratio -> upstream pixel size (verified: upstream honours the aspect exactly)
 $script:RatioSizes = @{
@@ -83,137 +90,11 @@ $script:RatioSizes = @{
 }
 $script:Ratios = @('1:1', '16:9', '9:16', '4:3')
 
-# ==============================================================================
-#  Provider store  (user-supplied LLM endpoints, encrypted at rest)
-#  Secrets are sealed with Windows DPAPI scoped to the current user, so the
-#  file is readable only by this Windows account on this machine.
-#  The server stays ASCII-only: it returns machine codes, the frontend renders
-#  all Chinese copy.
-# ==============================================================================
-
-function Protect-String {
-    param([string]$Plain)
-    if ($null -eq $Plain) { $Plain = '' }
-    $bytes = [Text.Encoding]::UTF8.GetBytes($Plain)
-    $scope = [System.Security.Cryptography.DataProtectionScope]::CurrentUser
-    $enc = [System.Security.Cryptography.ProtectedData]::Protect($bytes, $null, $scope)
-    return [Convert]::ToBase64String($enc)
-}
-
-function Unprotect-String {
-    param([string]$Cipher)
-    if ([string]::IsNullOrWhiteSpace($Cipher)) { return '' }
-    $scope = [System.Security.Cryptography.DataProtectionScope]::CurrentUser
-    $dec = [System.Security.Cryptography.ProtectedData]::Unprotect([Convert]::FromBase64String($Cipher), $null, $scope)
-    return [Text.Encoding]::UTF8.GetString($dec)
-}
-
-function New-EmptyStore {
-    return [pscustomobject]@{
-        version       = 1
-        providers     = @()
-        activeChatId  = ''
-        activeImageId = ''
-    }
-}
-
-# Returns the decrypted store; corrupt/foreign ciphertext degrades to empty
-# rather than crashing the whole server.
-function Get-ProviderStore {
-    if (-not (Test-Path $ProviderFile)) { return (New-EmptyStore) }
-    try {
-        $raw = [IO.File]::ReadAllText($ProviderFile, [Text.Encoding]::UTF8)
-        if ([string]::IsNullOrWhiteSpace($raw)) { return (New-EmptyStore) }
-        # NOTE: must not be named $env - that name is taken by the .env map above
-        $envelope = $raw | ConvertFrom-Json
-        if (-not $envelope.data) { return (New-EmptyStore) }
-        $json = Unprotect-String -Cipher ([string]$envelope.data)
-        if ([string]::IsNullOrWhiteSpace($json)) { return (New-EmptyStore) }
-        $o = $json | ConvertFrom-Json
-        $store = New-EmptyStore
-        if ($o.providers) { $store.providers = @($o.providers) }
-        if ($o.activeChatId)  { $store.activeChatId  = [string]$o.activeChatId }
-        if ($o.activeImageId) { $store.activeImageId = [string]$o.activeImageId }
-        return $store
-    }
-    catch {
-        Write-Log "PROVIDER decrypt failed: $($_.Exception.Message)"
-        return (New-EmptyStore)
-    }
-}
-
-function Save-ProviderStore {
-    param($Store)
-    $json = $Store | ConvertTo-Json -Depth 24
-    $sealed = Protect-String -Plain $json
-    $envelope = @{
-        v    = 1
-        alg  = 'dpapi-currentuser'
-        data = $sealed
-    } | ConvertTo-Json -Depth 4
-    [IO.File]::WriteAllText($ProviderFile, $envelope, (New-Object Text.UTF8Encoding($false)))
-}
-
-function Get-ProviderById {
-    param($Store, [string]$Id)
-    if ([string]::IsNullOrWhiteSpace($Id)) { return $null }
-    foreach ($p in @($Store.providers)) { if ($p.id -eq $Id) { return $p } }
-    return $null
-}
-
-# A provider can serve text, image, or both; capability resolves accordingly.
-function Get-ActiveProvider {
-    param($Store, [string]$Capability)
-    $id = if ($Capability -eq 'image') { [string]$Store.activeImageId } else { [string]$Store.activeChatId }
-    $p = Get-ProviderById -Store $Store -Id $id
-    if (-not $p) { return $null }
-    $model = if ($Capability -eq 'image') { [string]$p.imageModel } else { [string]$p.chatModel }
-    if ([string]::IsNullOrWhiteSpace($model)) { return $null }
-    if ([string]::IsNullOrWhiteSpace($p.baseUrl)) { return $null }
-    return $p
-}
-
-function Mask-Secret {
-    param([string]$Value)
-    if ([string]::IsNullOrEmpty($Value)) { return '' }
-    if ($Value.Length -le 10) { return ('*' * $Value.Length) }
-    return $Value.Substring(0, 4) + ('*' * 6) + $Value.Substring($Value.Length - 4)
-}
-
-# Never emits apiKey in clear text.
-function ConvertTo-PublicProvider {
-    param($Provider)
-    return @{
-        id         = [string]$Provider.id
-        name       = [string]$Provider.name
-        baseUrl    = [string]$Provider.baseUrl
-        chatModel  = [string]$Provider.chatModel
-        imageModel = [string]$Provider.imageModel
-        keyMasked  = Mask-Secret -Value ([string]$Provider.apiKey)
-        hasKey     = (-not [string]::IsNullOrWhiteSpace([string]$Provider.apiKey))
-        createdAt  = [string]$Provider.createdAt
-        updatedAt  = [string]$Provider.updatedAt
-    }
-}
-
-function New-ProviderId {
-    return ('p' + (Get-Date).ToString('yyMMddHHmmss') + (Get-Random -Minimum 100 -Maximum 999))
-}
-
+# baseUrl normalization: strip trailing slash before appending the path
 function Normalize-BaseUrl {
     param([string]$Url)
     if ([string]::IsNullOrWhiteSpace($Url)) { return '' }
     return $Url.Trim().TrimEnd('/')
-}
-
-# Empty string = acceptable; otherwise a machine code the frontend translates.
-function Test-BaseUrlShape {
-    param([string]$Url)
-    if ([string]::IsNullOrWhiteSpace($Url)) { return 'url_empty' }
-    $u = $Url.Trim()
-    if ($u -notmatch '^https?://') { return 'url_scheme' }
-    try { $null = [Uri]$u } catch { return 'url_malformed' }
-    return ''
 }
 
 # ------------------------------------------------------------------ json helpers
@@ -252,18 +133,16 @@ function Get-Role {
 }
 
 # --------------------------------------------------------------------- ai calls
-# Unified adapter for any OpenAI-compatible endpoint. The vendor is decided at
-# runtime by whichever provider the user activated in Settings, never in code.
-function Invoke-LlmPost {
+# Agnes AI request layer (OpenAI-compatible): auth header, retry with backoff
+# and error classification live here so the stages below stay declarative.
+function Invoke-AgnesPost {
     param(
-        [string]$BaseUrl,
-        [string]$ApiKey,
         [string]$Path,
         [hashtable]$Payload,
         [int]$MaxAttempts = 3,
         [int]$TimeoutSec = 120
     )
-    $root = Normalize-BaseUrl -Url $BaseUrl
+    $root = Normalize-BaseUrl -Url $script:BaseUrl
     if ([string]::IsNullOrWhiteSpace($root)) {
         return @{ ok = $false; status = 0; body = ''; ms = 0; attempts = 0; msg = 'no_base_url' }
     }
@@ -281,8 +160,8 @@ function Invoke-LlmPost {
             $req.Method           = 'POST'
             $req.ContentType      = 'application/json; charset=utf-8'
             $req.Accept           = 'application/json'
-            if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
-                $req.Headers.Add('Authorization', "Bearer $ApiKey")
+            if (-not [string]::IsNullOrWhiteSpace($script:ApiKey)) {
+                $req.Headers.Add('Authorization', "Bearer $($script:ApiKey)")
             }
             $req.Timeout          = $TimeoutSec * 1000
             $req.ReadWriteTimeout = $TimeoutSec * 1000
@@ -349,77 +228,22 @@ function Invoke-LlmPost {
     return @{ ok = $false; status = $lastStatus; body = $lastMsg; ms = 0; attempts = $MaxAttempts; msg = $lastMsg }
 }
 
-# Plain GET used by the connectivity check to enumerate /models.
-function Invoke-LlmGet {
-    param([string]$BaseUrl, [string]$ApiKey, [string]$Path, [int]$TimeoutSec = 20)
-    $root = Normalize-BaseUrl -Url $BaseUrl
-    if ([string]::IsNullOrWhiteSpace($root)) {
-        return @{ ok = $false; status = 0; body = ''; ms = 0; msg = 'no_base_url' }
-    }
-    $sw = [Diagnostics.Stopwatch]::StartNew()
-    try {
-        $req = [Net.HttpWebRequest]::Create($root + $Path)
-        $req.Method = 'GET'
-        $req.Accept = 'application/json'
-        if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
-            $req.Headers.Add('Authorization', "Bearer $ApiKey")
-        }
-        $req.Timeout = $TimeoutSec * 1000
-        $req.ReadWriteTimeout = $TimeoutSec * 1000
-        $req.KeepAlive = $false
-        $resp = $req.GetResponse()
-        $sr = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
-        $body = $sr.ReadToEnd(); $sr.Close(); $resp.Close()
-        $sw.Stop()
-        return @{ ok = $true; status = 200; body = $body; ms = $sw.ElapsedMilliseconds }
-    }
-    catch [Net.WebException] {
-        $sw.Stop()
-        $ex = $_.Exception
-        $code = 0; $errBody = ''
-        if ($ex.Response) {
-            try {
-                $code = [int]$ex.Response.StatusCode
-                $sr = New-Object IO.StreamReader($ex.Response.GetResponseStream(), [Text.Encoding]::UTF8)
-                $errBody = $sr.ReadToEnd(); $sr.Close()
-            } catch {}
-        }
-        if ($ex.Status -eq [Net.WebExceptionStatus]::Timeout -or $ex.Status -eq [Net.WebExceptionStatus]::RequestCanceled) { $code = 504 }
-        elseif ($code -eq 0) { $code = 502 }
-        $reason = ''
-        if ($ex.Status -eq [Net.WebExceptionStatus]::NameResolutionFailure) { $reason = 'dns' }
-        elseif ($ex.Status -eq [Net.WebExceptionStatus]::ConnectFailure) { $reason = 'connect' }
-        elseif ($ex.Status -eq [Net.WebExceptionStatus]::TrustFailure) { $reason = 'tls' }
-        elseif ($ex.Status -eq [Net.WebExceptionStatus]::SecureChannelFailure) { $reason = 'tls' }
-        $msg = $errBody
-        if ($msg.Length -gt 200) { $msg = $msg.Substring(0, 200) }
-        if (-not $msg) { $msg = $ex.Message }
-        return @{ ok = $false; status = $code; body = $errBody; ms = $sw.ElapsedMilliseconds; msg = $msg; reason = $reason }
-    }
-    catch {
-        $sw.Stop()
-        return @{ ok = $false; status = 502; body = ''; ms = $sw.ElapsedMilliseconds; msg = $_.Exception.Message; reason = 'unknown' }
-    }
-}
 
-# Resolves the user's active text provider. A failure hash is returned when the
-# user has not configured one, so callers can surface a guided message.
+# Agnes text completion. Returns a failure hash when the key is missing so the
+# UI can explain the situation instead of surfacing a raw transport error.
 function Invoke-ChatCompletion {
     param([string]$Prompt, [double]$Temperature = 1.0, [int]$TimeoutSec = 60)
-    $Store = Get-ProviderStore
-    $p = Get-ActiveProvider -Store $Store -Capability 'chat'
-    if (-not $p) {
-        return @{ ok = $false; status = 0; attempts = 0; ms = 0; msg = 'no_provider_chat' }
+    if ([string]::IsNullOrWhiteSpace($script:ApiKey)) {
+        return @{ ok = $false; status = 0; attempts = 0; ms = 0; msg = 'no_api_key' }
     }
 
     $payload = @{
-        model       = [string]$p.chatModel
+        model       = $script:TextModel
         messages    = @(@{ role = 'user'; content = $Prompt })
         temperature = $Temperature
         max_tokens  = $script:MaxTokens
     }
-    $r = Invoke-LlmPost -BaseUrl ([string]$p.baseUrl) -ApiKey ([string]$p.apiKey) `
-                        -Path '/chat/completions' -Payload $payload -MaxAttempts 3 -TimeoutSec $TimeoutSec
+    $r = Invoke-AgnesPost -Path '/chat/completions' -Payload $payload -MaxAttempts 3 -TimeoutSec $TimeoutSec
     if (-not $r.ok) { return $r }
 
     $parsed = $null
@@ -430,7 +254,7 @@ function Invoke-ChatCompletion {
         # reasoning models may leave content empty and fill reasoning_content
         if ([string]::IsNullOrWhiteSpace($content) -and $msg.reasoning_content) {
             $content = [string]$msg.reasoning_content
-            Write-Log "CHAT reasoning_content fallback used provider=$($p.id)"
+            Write-Log "CHAT reasoning_content fallback used model=$($script:TextModel)"
         }
         $r.content = $content
     }
@@ -464,15 +288,18 @@ function Invoke-ImageGeneration {
     $size = $script:RatioSizes[$Ratio]
     if (-not $size) { $size = '1024x1024' ; $Ratio = '1:1' }
 
-    $Store = Get-ProviderStore
-    $p = Get-ActiveProvider -Store $Store -Capability 'image'
-    if (-not $p) {
-        return @{ ok = $false; status = 0; attempts = 0; ms = 0; msg = 'no_provider_image' }
+    if ([string]::IsNullOrWhiteSpace($script:ApiKey)) {
+        return @{ ok = $false; status = 0; attempts = 0; ms = 0; msg = 'no_api_key' }
     }
 
-    $payload = @{ model = [string]$p.imageModel; prompt = $Prompt; n = 1; size = $size }
-    $r = Invoke-LlmPost -BaseUrl ([string]$p.baseUrl) -ApiKey ([string]$p.apiKey) `
-                        -Path '/images/generations' -Payload $payload -MaxAttempts 2 -TimeoutSec 75
+    $payload = @{ model = $script:ImageModel; prompt = $Prompt; n = 1; size = $size }
+    $r = Invoke-AgnesPost -Path '/images/generations' -Payload $payload -MaxAttempts 2 -TimeoutSec 75
+    # Fall back to the previous-generation image model once before giving up.
+    if (-not $r.ok -and $script:ImageModelFallback) {
+        Write-Log "IMAGE retry with fallback model=$($script:ImageModelFallback) ratio=$Ratio"
+        $payload.model = $script:ImageModelFallback
+        $r = Invoke-AgnesPost -Path '/images/generations' -Payload $payload -MaxAttempts 1 -TimeoutSec 75
+    }
     if (-not $r.ok) { return $r }
 
     $parsed = $null
@@ -615,9 +442,9 @@ function Write-UpstreamFail {
     param($Ctx, $Result, [string]$Stage)
     Write-Log "UPSTREAM_FAIL stage=$Stage status=$($Result.status) attempts=$($Result.attempts) ms=$($Result.ms) err=$($Result.msg)"
 
-    # Nothing is broken upstream - the user simply has no model activated yet.
-    if ($Result.msg -eq 'no_provider_chat' -or $Result.msg -eq 'no_provider_image' -or $Result.msg -eq 'no_base_url') {
-        Write-Fail $Ctx 'no_provider' 'no active model provider configured' 503
+    # Nothing is broken upstream - the Agnes key simply is not configured.
+    if ($Result.msg -eq 'no_api_key' -or $Result.msg -eq 'no_base_url') {
+        Write-Fail $Ctx 'no_api_key' 'AGNES_API_KEY is not set in .env' 503
         return
     }
 
@@ -932,225 +759,6 @@ function Invoke-RegenerateStage {
     Write-Json $Ctx @{ ok = $true; record = (ConvertTo-PublicRecord -Record $record) }
 }
 
-# ---------------------------------------------------- api: provider management
-
-function Get-ProviderListPayload {
-    $Store = Get-ProviderStore
-    $list = @()
-    foreach ($p in @($Store.providers)) {
-        $list += ,(ConvertTo-PublicProvider -Provider $p)
-    }
-    return @{
-        ok            = $true
-        providers     = $list
-        activeChatId  = [string]$Store.activeChatId
-        activeImageId = [string]$Store.activeImageId
-    }
-}
-
-function Invoke-ProviderUpsert {
-    param($Ctx, $Body)
-
-    $id         = Get-Step $Body 'id' ''
-    $name       = Get-Step $Body 'name' ''
-    $baseUrl    = Normalize-BaseUrl -Url (Get-Step $Body 'baseUrl' '')
-    $apiKey     = Get-Step $Body 'apiKey' ''
-    $chatModel  = Get-Step $Body 'chatModel' ''
-    $imageModel = Get-Step $Body 'imageModel' ''
-
-    $shape = Test-BaseUrlShape -Url $baseUrl
-    if ($shape) { Write-Fail $Ctx $shape 'base url is not usable'; return }
-    if ([string]::IsNullOrWhiteSpace($chatModel) -and [string]::IsNullOrWhiteSpace($imageModel)) {
-        Write-Fail $Ctx 'no_model' 'at least one model id is required'; return
-    }
-
-    $Store = Get-ProviderStore
-    $now = Get-NowIso
-
-    if ($id) {
-        $p = Get-ProviderById -Store $Store -Id $id
-        if (-not $p) { Write-Fail $Ctx 'not_found' 'provider not found' 404; return }
-        $p.name       = $name
-        $p.baseUrl    = $baseUrl
-        $p.chatModel  = $chatModel
-        $p.imageModel = $imageModel
-        # An empty key on update means "keep the stored secret": the UI only
-        # ever receives a masked value, so it cannot resend the real one.
-        if (-not [string]::IsNullOrWhiteSpace($apiKey)) { $p.apiKey = $apiKey }
-        $p.updatedAt = $now
-        $savedId = $p.id
-    }
-    else {
-        if ([string]::IsNullOrWhiteSpace($apiKey)) { Write-Fail $Ctx 'no_api_key' 'api key is required'; return }
-        $np = [pscustomobject]@{
-            id         = (New-ProviderId)
-            name       = $name
-            baseUrl    = $baseUrl
-            apiKey     = $apiKey
-            chatModel  = $chatModel
-            imageModel = $imageModel
-            createdAt  = $now
-            updatedAt  = $now
-        }
-        $Store.providers = @($Store.providers) + @($np)
-        # First provider wins the slot automatically so the app is usable at once.
-        if ($chatModel  -and [string]::IsNullOrWhiteSpace($Store.activeChatId))  { $Store.activeChatId  = $np.id }
-        if ($imageModel -and [string]::IsNullOrWhiteSpace($Store.activeImageId)) { $Store.activeImageId = $np.id }
-        $savedId = $np.id
-    }
-
-    Save-ProviderStore -Store $Store
-    Write-Log "PROVIDER upsert id=$savedId name=$name chat=$chatModel image=$imageModel"
-
-    $payload = Get-ProviderListPayload
-    $payload.savedId = $savedId
-    Write-Json $Ctx $payload
-}
-
-function Invoke-ProviderActivate {
-    param($Ctx, $Body)
-    $id  = Get-Step $Body 'id' ''
-    $cap = Get-Step $Body 'capability' 'chat'
-    if ($cap -ne 'image') { $cap = 'chat' }
-
-    $Store = Get-ProviderStore
-    $p = Get-ProviderById -Store $Store -Id $id
-    if (-not $p) { Write-Fail $Ctx 'not_found' 'provider not found' 404; return }
-
-    if ($cap -eq 'image') {
-        if ([string]::IsNullOrWhiteSpace([string]$p.imageModel)) {
-            Write-Fail $Ctx 'no_model' 'this provider has no image model'; return
-        }
-        $Store.activeImageId = $id
-    }
-    else {
-        if ([string]::IsNullOrWhiteSpace([string]$p.chatModel)) {
-            Write-Fail $Ctx 'no_model' 'this provider has no chat model'; return
-        }
-        $Store.activeChatId = $id
-    }
-
-    Save-ProviderStore -Store $Store
-    Write-Log "PROVIDER activate id=$id capability=$cap"
-    Write-Json $Ctx (Get-ProviderListPayload)
-}
-
-# Step-by-step connectivity check. Accepts either a saved provider id or
-# ad-hoc parameters, so the UI can validate before anything is persisted.
-function Invoke-ProviderTest {
-    param($Ctx, $Body)
-
-    $id         = Get-Step $Body 'id' ''
-    $baseUrl    = Get-Step $Body 'baseUrl' ''
-    $apiKey     = Get-Step $Body 'apiKey' ''
-    $chatModel  = Get-Step $Body 'chatModel' ''
-    $imageModel = Get-Step $Body 'imageModel' ''
-
-    if ($id) {
-        $Store = Get-ProviderStore
-        $p = Get-ProviderById -Store $Store -Id $id
-        if (-not $p) { Write-Fail $Ctx 'not_found' 'provider not found' 404; return }
-        if ([string]::IsNullOrWhiteSpace($baseUrl))    { $baseUrl    = [string]$p.baseUrl }
-        if ([string]::IsNullOrWhiteSpace($apiKey))     { $apiKey     = [string]$p.apiKey }
-        if ([string]::IsNullOrWhiteSpace($chatModel))  { $chatModel  = [string]$p.chatModel }
-        if ([string]::IsNullOrWhiteSpace($imageModel)) { $imageModel = [string]$p.imageModel }
-    }
-
-    $steps = @()
-    $t0 = Get-Date
-
-    # --- step 1: url shape
-    $shape = Test-BaseUrlShape -Url $baseUrl
-    if ($shape) {
-        $steps += ,(@{ key = 'url'; status = 'fail'; code = $shape; detail = $baseUrl })
-        Write-Json $Ctx @{ ok = $true; passed = $false; steps = $steps; models = @(); latencyMs = 0 }
-        return
-    }
-    $root = Normalize-BaseUrl -Url $baseUrl
-    $steps += ,(@{ key = 'url'; status = 'pass'; code = ''; detail = $root })
-
-    # --- step 2: reachability + auth via /models (not all vendors expose it)
-    $models = @()
-    $list = Invoke-LlmGet -BaseUrl $root -ApiKey $apiKey -Path '/models' -TimeoutSec 20
-    if ($list.ok) {
-        try {
-            $parsed = $list.body | ConvertFrom-Json
-            if ($parsed.data) {
-                foreach ($m in $parsed.data) { if ($m.id) { $models += [string]$m.id } }
-            }
-        } catch {}
-        $steps += ,(@{ key = 'auth'; status = 'pass'; code = ''; detail = ("HTTP 200, " + $models.Count + " models") })
-    }
-    else {
-        $c = 'upstream_error'
-        if ($list.reason -eq 'dns' -or $list.reason -eq 'connect') { $c = 'upstream_unreachable' }
-        elseif ($list.reason -eq 'tls') { $c = 'upstream_tls' }
-        elseif ($list.status -eq 401 -or $list.status -eq 403) { $c = 'upstream_auth_failed' }
-        elseif ($list.status -eq 404) { $c = 'models_unsupported' }
-        elseif ($list.status -eq 504) { $c = 'upstream_timeout' }
-        $steps += ,(@{ key = 'auth'; status = 'warn'; code = $c; detail = ("HTTP " + $list.status + " " + $list.msg) })
-    }
-
-    # --- step 3: text model is decisive, so actually run a tiny completion
-    if (-not [string]::IsNullOrWhiteSpace($chatModel)) {
-        $payload = @{
-            model      = $chatModel
-            messages   = @(@{ role = 'user'; content = 'ping' })
-            max_tokens = 32
-        }
-        $cr = Invoke-LlmPost -BaseUrl $root -ApiKey $apiKey -Path '/chat/completions' `
-                             -Payload $payload -MaxAttempts 1 -TimeoutSec 30
-        if ($cr.ok) {
-            $steps += ,(@{ key = 'chat'; status = 'pass'; code = ''; detail = ($chatModel + " ok in " + $cr.ms + "ms") })
-        }
-        else {
-            $c = 'upstream_error'
-            if ($cr.reason -eq 'dns' -or $cr.reason -eq 'connect') { $c = 'upstream_unreachable' }
-            elseif ($cr.reason -eq 'tls') { $c = 'upstream_tls' }
-            elseif ($cr.status -eq 401 -or $cr.status -eq 403) { $c = 'upstream_auth_failed' }
-            elseif ($cr.status -eq 404) { $c = 'model_not_found' }
-            elseif ($cr.status -eq 429) { $c = 'upstream_rate_limited' }
-            elseif ($cr.status -eq 504) { $c = 'upstream_timeout' }
-            $steps += ,(@{ key = 'chat'; status = 'fail'; code = $c; detail = ("HTTP " + $cr.status + " " + $cr.msg) })
-        }
-    }
-    else {
-        $steps += ,(@{ key = 'chat'; status = 'skip'; code = 'not_provided'; detail = '' })
-    }
-
-    # --- step 4: image model is validated against the catalog (no paid render)
-    if (-not [string]::IsNullOrWhiteSpace($imageModel)) {
-        if ($models.Count -gt 0) {
-            $hit = $false
-            foreach ($m in $models) { if ($m -eq $imageModel) { $hit = $true } }
-            if ($hit) {
-                $steps += ,(@{ key = 'image'; status = 'pass'; code = ''; detail = ($imageModel + " listed") })
-            }
-            else {
-                $steps += ,(@{ key = 'image'; status = 'warn'; code = 'model_not_listed'; detail = ($imageModel + " not in catalog") })
-            }
-        }
-        else {
-            $steps += ,(@{ key = 'image'; status = 'warn'; code = 'cannot_verify'; detail = 'endpoint exposes no /models' })
-        }
-    }
-    else {
-        $steps += ,(@{ key = 'image'; status = 'skip'; code = 'not_provided'; detail = '' })
-    }
-
-    $passed = $true
-    foreach ($s in $steps) { if ($s.status -eq 'fail') { $passed = $false } }
-
-    Write-Log "PROVIDER test base=$root chat=$chatModel image=$imageModel passed=$passed"
-    Write-Json $Ctx @{
-        ok        = $true
-        passed    = $passed
-        steps     = $steps
-        models    = $models
-        latencyMs = [int](((Get-Date) - $t0).TotalMilliseconds)
-    }
-}
-
 # ---------------------------------------------------------------- api: dispatch
 function Handle-Api {
     param($Ctx, [string]$Path)
@@ -1163,74 +771,21 @@ function Handle-Api {
     }
 
     if ($Path -eq '/api/health') {
-        $Store = Get-ProviderStore
-        $chat  = Get-ActiveProvider -Store $Store -Capability 'chat'
-        $img   = Get-ActiveProvider -Store $Store -Capability 'image'
-
-        $chatPub = @{ configured = $false; name = ''; model = ''; baseUrl = '' }
-        if ($chat) {
-            $chatPub = @{
-                configured = $true
-                name       = [string]$chat.name
-                model      = [string]$chat.chatModel
-                baseUrl    = [string]$chat.baseUrl
-            }
-        }
-        $imgPub = @{ configured = $false; name = ''; model = ''; baseUrl = '' }
-        if ($img) {
-            $imgPub = @{
-                configured = $true
-                name       = [string]$img.name
-                model      = [string]$img.imageModel
-                baseUrl    = [string]$img.baseUrl
-            }
-        }
-
+        $keyOk = -not [string]::IsNullOrWhiteSpace($script:ApiKey)
+        $chatPub = @{ configured = $keyOk; name = 'Agnes AI'; model = $script:TextModel;  baseUrl = $script:BaseUrl }
+        $imgPub  = @{ configured = $keyOk; name = 'Agnes AI'; model = $script:ImageModel; baseUrl = $script:BaseUrl }
         Write-Json $Ctx @{
-            ok            = $true
-            service       = 'huizhi-ai'
-            version       = '2.0.0'
-            ratios        = $script:Ratios
-            chat          = $chatPub
-            image         = $imgPub
-            providerCount = @($Store.providers).Count
-            configured    = ($chatPub.configured -and $imgPub.configured)
-            time          = (Get-NowIso)
+            ok         = $true
+            service    = 'huizhi-ai'
+            version    = '3.0.0'
+            provider   = 'Agnes AI'
+            baseUrl    = $script:BaseUrl
+            ratios     = $script:Ratios
+            chat       = $chatPub
+            image      = $imgPub
+            configured = $keyOk
+            time       = (Get-NowIso)
         }
-        return
-    }
-
-    # ---------------------------------------------- user model configuration
-    if ($Path -eq '/api/providers' -and $method -eq 'GET') {
-        Write-Json $Ctx (Get-ProviderListPayload)
-        return
-    }
-
-    if ($Path -eq '/api/providers' -and $method -eq 'POST') {
-        Invoke-ProviderUpsert -Ctx $Ctx -Body (Read-RequestBody $Ctx)
-        return
-    }
-
-    if ($Path -eq '/api/providers' -and $method -eq 'DELETE') {
-        $id = [string]$Ctx.Request.QueryString['id']
-        if (-not $id) { Write-Fail $Ctx 'missing_id' 'query id is required'; return }
-        $Store = Get-ProviderStore
-        $Store.providers = @($Store.providers | Where-Object { $_.id -ne $id })
-        if ($Store.activeChatId -eq $id)  { $Store.activeChatId  = '' }
-        if ($Store.activeImageId -eq $id) { $Store.activeImageId = '' }
-        Save-ProviderStore -Store $Store
-        Write-Log "PROVIDER delete id=$id"
-        Write-Json $Ctx (Get-ProviderListPayload)
-        return
-    }
-
-    if ($Path -eq '/api/providers/activate' -and $method -eq 'POST') {
-        Invoke-ProviderActivate -Ctx $Ctx -Body (Read-RequestBody $Ctx)
-        return
-    }
-
-    if ($Path -eq '/api/providers/test' -and $method -eq 'POST') {
-        Invoke-ProviderTest -Ctx $Ctx -Body (Read-RequestBody $Ctx)
         return
     }
 
@@ -1278,10 +833,17 @@ function Handle-Api {
         return
     }
 
+    # Resolve the path first so an unknown endpoint returns a proper 404,
+    # leaving 405 to mean "right endpoint, wrong method".
+    $postOnly = @('/api/plan', '/api/render', '/api/refine', '/api/rerender', '/api/regenerate')
+    if ($postOnly -notcontains $Path) {
+        Write-Fail $Ctx 'unknown_endpoint' ("unknown endpoint " + $Path) 404
+        return
+    }
     if ($method -ne 'POST') { Write-Fail $Ctx 'method_not_allowed' 'unsupported method' 405; return }
 
-    # No global key gate any more: every stage resolves its own active provider
-    # and reports 'no_provider' when the user has not configured one yet.
+    # Each stage checks the Agnes key itself and reports 'no_api_key' so the UI
+    # can tell the user exactly what is missing.
 
     $Body = Read-RequestBody $Ctx
     switch ($Path) {
@@ -1290,7 +852,6 @@ function Handle-Api {
         '/api/refine'     { Invoke-RefineStage     -Ctx $Ctx -Body $Body }
         '/api/rerender'   { Invoke-RerenderStage   -Ctx $Ctx -Body $Body }
         '/api/regenerate' { Invoke-RegenerateStage -Ctx $Ctx -Body $Body }
-        default           { Write-Fail $Ctx 'unknown_endpoint' ("unknown endpoint " + $Path) 404 }
     }
 }
 
@@ -1313,7 +874,7 @@ $script:MimeTypes = @{
 # NOTE: compared against a path already normalised to backslashes.
 $script:DeniedPaths = @(
     '.env', '.env.example', '.gitignore', 'server.ps1', 'server', 'readme.md',
-    'data\roles.json', 'data\records.json', 'data\providers.dat', 'data\providers.dat.tmp'
+    'data\roles.json', 'data\records.json'
 )
 
 function Serve-Static {
@@ -1424,17 +985,17 @@ foreach ($ip in Get-LanAddresses) {
         Write-Host "   Mobile   : http://${ip}:$($script:Port)/" -ForegroundColor Green
     }
 }
-$bootStore = Get-ProviderStore
-$bootChat  = Get-ActiveProvider -Store $bootStore -Capability 'chat'
-$bootImage = Get-ActiveProvider -Store $bootStore -Capability 'image'
-Write-Host "   Providers: $(@($bootStore.providers).Count) saved" -ForegroundColor Gray
-Write-Host "   Text     : $(if ($bootChat)  { [string]$bootChat.chatModel  + '  @ ' + [string]$bootChat.baseUrl }  else { '(none) configure in Settings' })" -ForegroundColor $(if ($bootChat)  { 'Gray' } else { 'Yellow' })
-Write-Host "   Image    : $(if ($bootImage) { [string]$bootImage.imageModel + '  @ ' + [string]$bootImage.baseUrl } else { '(none) configure in Settings' })" -ForegroundColor $(if ($bootImage) { 'Gray' } else { 'Yellow' })
+$keyOk2 = -not [string]::IsNullOrWhiteSpace($script:ApiKey)
+Write-Host "   Provider : Agnes AI"
+Write-Host "   BaseUrl  : $($script:BaseUrl)"
+Write-Host "   Text     : $($script:TextModel)"
+Write-Host "   Image    : $($script:ImageModel)"
+Write-Host "   KEY      : $(if ($keyOk2) { 'configured (from .env)' } else { 'MISSING -> set AGNES_API_KEY in .env' })" -ForegroundColor $(if ($keyOk2) { 'Gray' } else { 'Yellow' })
 Write-Host "   Bind     : $($script:ActivePrefix)"
 Write-Host "   Stop     : Ctrl + C"
 Write-Host ""
 
-Write-Log "SERVER start prefix=$($script:ActivePrefix) providers=$(@($bootStore.providers).Count) chat=$($bootChat.chatModel) image=$($bootImage.imageModel)"
+Write-Log "SERVER start prefix=$($script:ActivePrefix) provider=AgnesAI text=$($script:TextModel) image=$($script:ImageModel) key=$($keyOk2)"
 
 while ($listener.IsListening) {
     $ctx = $null
