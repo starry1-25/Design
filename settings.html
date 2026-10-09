@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07070f">
+<title>设置 · 绘职 AI</title>
+<meta name="description" content="绘职 AI 设置：接入你自己的大模型服务，配置 API 地址、密钥与模型标识，并管理生成偏好与本地数据。">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<div class="bg-grid" aria-hidden="true"></div>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="index.html">
+      <span class="brand-mark" data-icon="sparkle" aria-hidden="true"></span>
+      <span class="brand-name">绘职 <em>AI</em></span>
+    </a>
+    <nav class="nav-actions">
+      <a class="nav-link" href="history.html" data-icon="history">历史记录</a>
+      <a class="nav-link" href="settings.html" data-icon="sliders">设置</a>
+      <button class="nav-toggle" type="button" data-icon="menu" aria-label="打开菜单"></button>
+    </nav>
+  </div>
+  <div class="nav-sheet">
+    <a class="nav-link" href="history.html" data-icon="history">历史记录</a>
+    <a class="nav-link" href="settings.html" data-icon="sliders">设置</a>
+  </div>
+</header>
+
+<main class="page">
+  <section class="wrap page-head">
+    <h1 class="page-title">设置 · 个人中心</h1>
+    <p class="page-desc">接入你自己的大模型服务，并管理生成偏好与本地数据。</p>
+  </section>
+
+  <section class="wrap">
+    <div class="grid-2">
+
+      <!-- ============================================ 大模型接入配置 -->
+      <div class="card" id="llmCard">
+        <div class="card-head">
+          <div>
+            <h3>大模型接入配置</h3>
+            <p>支持任意兼容 OpenAI 协议的大模型服务。密钥经 Windows DPAPI 加密后仅保存在本机，不会随项目上传。</p>
+          </div>
+          <button class="btn is-primary" type="button" id="addProvider">
+            <span data-icon="plus"></span><span>添加模型接入</span>
+          </button>
+        </div>
+
+        <div class="prov-list" id="provList"></div>
+
+        <!-- 新增 / 编辑表单 -->
+        <div class="prov-form is-hidden" id="provForm">
+          <div class="pf-title" id="pfTitle">添加模型接入</div>
+
+          <div class="pf-grid">
+            <label class="field">
+              <span class="field-label">名称</span>
+              <input type="text" id="pfName" autocomplete="off" placeholder="例如：公司网关 / OpenAI / 本地 Ollama">
+            </label>
+
+            <label class="field">
+              <span class="field-label">API 地址 <em>*</em></span>
+              <input type="text" id="pfBaseUrl" autocomplete="off" spellcheck="false"
+                     placeholder="https://api.openai.com/v1">
+              <span class="field-hint">要填到版本号为止，例如 <code>…/v1</code></span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">API 密钥 <em>*</em></span>
+              <input type="password" id="pfApiKey" autocomplete="new-password" spellcheck="false"
+                     placeholder="sk-…">
+              <span class="field-hint" id="pfKeyHint">仅加密保存在本机</span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">文本模型标识</span>
+              <input type="text" id="pfChatModel" autocomplete="off" spellcheck="false"
+                     placeholder="gpt-4o-mini">
+              <span class="field-hint">用于需求解析与多轮微调</span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">图像模型标识</span>
+              <input type="text" id="pfImageModel" autocomplete="off" spellcheck="false"
+                     placeholder="gpt-image-1 / dall-e-3">
+              <span class="field-hint">用于出图，需支持 <code>/images/generations</code></span>
+            </label>
+          </div>
+
+          <div class="pf-actions">
+            <button class="btn" type="button" id="pfTest">
+              <span data-icon="plug"></span><span>测试连接</span></button>
+            <button class="btn is-primary" type="button" id="pfSave">
+              <span data-icon="check"></span><span>保存</span></button>
+            <button class="btn is-ghost" type="button" id="pfCancel">
+              <span data-icon="close"></span><span>取消</span></button>
+            <span class="pf-status" id="pfStatus"></span>
+          </div>
+
+          <div class="pf-result is-hidden" id="pfResult"></div>
+        </div>
+      </div>
+
+      <!-- ============================================ 运行状态 -->
+      <div class="card">
+        <h3>运行状态</h3>
+        <p>当前实际生效的模型由上方「已启用」的接入决定。</p>
+        <div class="setting-row">
+          <span class="label">本地服务</span>
+          <span class="live" id="svcLive"><i aria-hidden="true"></i> 检测中…</span>
+        </div>
+        <div class="setting-row"><span class="label">服务版本</span><span class="value" id="svcVersion">—</span></div>
+        <div class="setting-row"><span class="label">已保存接入</span><span class="value" id="svcCount">—</span></div>
+        <div class="setting-row"><span class="label">文本模型</span><span class="value" id="svcChat">—</span></div>
+        <div class="setting-row"><span class="label">图像模型</span><span class="value" id="svcImage">—</span></div>
+        <div class="setting-row"><span class="label">可用状态</span><span class="value" id="svcReady">—</span></div>
+      </div>
+
+      <!-- ============================================ 默认生成偏好 -->
+      <div class="card">
+        <h3>默认生成偏好</h3>
+        <p>仅保存在本机浏览器，用于首页的初始岗位与画幅。</p>
+
+        <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:9px">
+          <span class="label">默认岗位</span>
+          <div class="chips" id="prefRoles" style="flex-wrap:wrap"></div>
+        </div>
+
+        <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:9px">
+          <span class="label">默认比例</span>
+          <div class="chips" id="prefRatios" style="flex-wrap:wrap"></div>
+        </div>
+
+        <div class="setting-row">
+          <span class="label">当前偏好</span>
+          <span class="value" id="prefSummary">—</span>
+        </div>
+      </div>
+
+      <!-- ============================================ 数据管理 -->
+      <div class="card">
+        <h3>数据管理</h3>
+        <p>历史记录、生成的图片与接入配置都保存在本地 <code>data/</code> 目录。</p>
+        <div class="setting-row"><span class="label">历史记录数量</span><span class="value" id="dataCount">—</span></div>
+        <div class="setting-row"><span class="label">记录存储位置</span><span class="value">data/records.json</span></div>
+        <div class="setting-row"><span class="label">图片存储位置</span><span class="value">data/images/</span></div>
+        <div class="setting-row">
+          <span class="label">接入配置存储</span>
+          <span class="value">data/providers.dat（加密）</span>
+        </div>
+        <div class="setting-row" style="gap:8px">
+          <span class="label">管理历史</span>
+          <a class="btn" href="history.html"><span data-icon="history"></span><span>前往历史记录</span></a>
+        </div>
+        <div class="setting-row">
+          <span class="label">重置本机偏好</span>
+          <button class="btn" type="button" id="resetPrefs">
+            <span data-icon="refresh"></span><span>重置</span></button>
+        </div>
+      </div>
+
+      <!-- ============================================ 账户 -->
+      <div class="card">
+        <h3>账户与团队 <span class="badge-soon">预留</span></h3>
+        <p>MVP 阶段无需登录即可使用，以下能力将在后续版本开放。</p>
+        <div class="setting-row"><span class="label">个人空间</span><span class="badge-soon">敬请期待</span></div>
+        <div class="setting-row"><span class="label">团队协作与共享</span><span class="badge-soon">敬请期待</span></div>
+        <div class="setting-row"><span class="label">云端历史同步</span><span class="badge-soon">敬请期待</span></div>
+        <div class="setting-row"><span class="label">商用授权说明</span><span class="badge-soon">敬请期待</span></div>
+      </div>
+
+      <!-- ============================================ 关于 -->
+      <div class="card">
+        <h3>关于绘职 AI</h3>
+        <p>按岗位细分的 AI 视觉生成 Agent 平台 · V2.0</p>
+        <div class="setting-row">
+          <span class="label">岗位覆盖</span>
+          <span class="value">产品经理 · 交互设计 · UI 设计 · 运营设计 · 前端开发</span>
+        </div>
+        <div class="setting-row"><span class="label">生成画幅</span><span class="value">1:1 · 16:9 · 9:16 · 4:3</span></div>
+        <div class="setting-row">
+          <span class="label">模型来源</span>
+          <span class="value">完全由用户自行接入，项目不内置任何厂商密钥</span>
+        </div>
+        <div class="setting-row">
+          <span class="label">生成内容版权</span>
+          <span class="value">请遵守你所接入模型服务商的服务条款</span>
+        </div>
+        <div class="setting-row">
+          <span class="label">每次结果都不同</span>
+          <span class="value">同一输入会注入随机创作种子，因而每次生成都是全新方案</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<footer class="foot wrap">
+  <strong>绘职 AI</strong> · 让每个岗位，都有专属的视觉智能
+</footer>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/providers.js"></script>
+<script src="assets/js/settings.js"></script>
+</body>
+</html>

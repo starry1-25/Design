@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07070f">
+<title>绘职 AI · 懂你岗位的智能视觉引擎</title>
+<meta name="description" content="绘职 AI 是一款懂你岗位的智能视觉引擎。按产品经理、交互设计、UI 设计、运营设计、前端开发五大岗位细分，输入业务需求即可直出高保真视觉稿，并支持与视觉 Agent 多轮对话微调。">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<div class="bg-grid" aria-hidden="true"></div>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="index.html">
+      <span class="brand-mark" data-icon="sparkle" aria-hidden="true"></span>
+      <span class="brand-name">绘职 <em>AI</em></span>
+    </a>
+    <nav class="nav-actions">
+      <a class="nav-link" href="history.html" data-icon="history">历史记录</a>
+      <a class="nav-link" href="settings.html" data-icon="sliders">设置</a>
+      <button class="nav-toggle" type="button" data-icon="menu" aria-label="打开菜单"></button>
+    </nav>
+  </div>
+  <div class="nav-sheet">
+    <a class="nav-link" href="history.html" data-icon="history">历史记录</a>
+    <a class="nav-link" href="settings.html" data-icon="sliders">设置</a>
+  </div>
+</header>
+
+<!-- 未接入大模型时的接入引导条：接入完成后自动隐藏，不阻塞任何基础操作 -->
+<div class="connect-bar is-hidden" id="connectBar" data-chat="0" data-image="0">
+  <div class="wrap connect-inner">
+    <span class="connect-ico" data-icon="plug" aria-hidden="true"></span>
+    <div class="connect-text">
+      <strong id="connectTitle">尚未接入大模型</strong>
+      <span id="connectDesc">接入后可解锁：需求智能解析 · 视觉稿生成 · 多轮对话微调</span>
+      <div class="connect-caps">
+        <span class="cap" data-cap="chat"><span data-icon="check" aria-hidden="true"></span>需求解析与多轮微调</span>
+        <span class="cap" data-cap="image"><span data-icon="check" aria-hidden="true"></span>视觉稿生成</span>
+      </div>
+    </div>
+    <a class="btn is-primary connect-cta" href="settings.html#llmCard">
+      <span data-icon="sliders"></span><span>立即接入</span>
+    </a>
+  </div>
+</div>
+
+<main class="page">
+
+  <section class="hero wrap">
+    <p class="hero-kicker">Role-Based Visual Agent</p>
+    <h1 class="hero-title">懂你岗位的智能视觉引擎</h1>
+    <p class="hero-sub">按岗位细分，输入需求直出视觉稿</p>
+  </section>
+
+  <!-- 01 岗位选择 -->
+  <section class="section wrap">
+    <div class="section-head">
+      <span class="section-no">01</span>
+      <div>
+        <h2 class="section-title">选择你的岗位</h2>
+        <p class="section-sub">Agent 将基于岗位经验理解你的需求</p>
+      </div>
+    </div>
+    <div class="roles" id="roles" role="radiogroup" aria-label="选择岗位"></div>
+  </section>
+
+  <!-- 02 需求描述 -->
+  <section class="section wrap">
+    <div class="section-head">
+      <span class="section-no">02</span>
+      <div>
+        <h2 class="section-title">描述你的创意</h2>
+        <p class="section-sub">尽可能提供业务目标和视觉偏好</p>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-head">
+        <span class="dot" aria-hidden="true"></span>
+        <h3>AI 需求解析器</h3>
+        <span class="pill" id="rolePill"><span data-icon="sparkle"></span><span id="rolePillText">产品经理</span></span>
+      </div>
+      <div class="composer-body">
+        <label class="sr-only" for="requirement">需求描述</label>
+        <textarea id="requirement" rows="5"
+          placeholder="请描述你的产品功能、目标用户和核心场景…"></textarea>
+      </div>
+      <div class="composer-foot">
+        <span class="counter" id="counter">0 字</span>
+        <div class="composer-tools">
+          <button class="btn btn-example" type="button" id="fillExample">
+            <span data-icon="wand"></span><span class="btn-label">填入示例</span>
+          </button>
+          <span class="hint-key"><kbd>↵ Enter</kbd> 快速生成 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <button class="cta" id="generate" type="button">
+        <span data-icon="plus" aria-hidden="true"></span>
+        <span id="generateLabel">开始生成视觉稿</span>
+        <span class="arrow" data-icon="arrowRight" aria-hidden="true"></span>
+      </button>
+    </div>
+  </section>
+
+  <!-- 03 生成结果 -->
+  <section class="section wrap">
+    <div class="section-head">
+      <span class="section-no">03</span>
+      <div>
+        <h2 class="section-title">生成结果</h2>
+        <p class="section-sub">继续和 Agent 对话，直到满意为止</p>
+      </div>
+      <div class="section-head-right">
+        <button class="live is-warn" id="live" type="button" data-ready="0">
+          <i aria-hidden="true"></i><span id="liveText">检测中…</span>
+        </button>
+      </div>
+    </div>
+    <div class="result" id="result"></div>
+  </section>
+
+</main>
+
+<footer class="foot wrap">
+  <strong>绘职 AI</strong> · 让每个岗位，都有专属的视觉智能
+</footer>
+
+<!-- 占位画布：未生成时的示例预览（生成后自动替换为真实视觉稿） -->
+<template id="tpl-mock">
+  <div class="mock" aria-hidden="true">
+    <div class="mock-side">
+      <div class="mock-logo">AI</div>
+      <div class="mock-nav"><span></span><span></span><span></span><span></span><span></span></div>
+    </div>
+    <div class="mock-main">
+      <div class="mock-top">
+        <div class="mock-hello">早上好，Alex<small>运营数据总览 · 今日</small></div>
+        <div class="mock-top-actions"><i></i><i></i><i></i></div>
+      </div>
+      <div class="mock-hero">
+        <div>
+          <h4>让每个想法<br>都清晰落地</h4>
+          <p>核心目标完成度</p>
+        </div>
+        <div class="mock-ring"><b>84%</b></div>
+      </div>
+      <div class="mock-stats">
+        <div class="mock-stat"><i style="background:#e6e2ff"></i><b>12</b><small>待评审需求</small></div>
+        <div class="mock-stat"><i style="background:#d8f7ee"></i><b>08</b><small>进行中迭代</small></div>
+        <div class="mock-stat"><i style="background:#dcf3ff"></i><b>2.4</b><small>转化率 %</small></div>
+      </div>
+      <div class="mock-lower">
+        <div class="mock-panel">
+          <h5>近 7 日趋势</h5>
+          <div class="mock-bars">
+            <span style="height:42%"></span><span style="height:58%"></span><span style="height:96%"></span>
+            <span style="height:36%"></span><span style="height:70%"></span><span style="height:84%"></span>
+            <span style="height:50%"></span><span style="height:64%"></span>
+          </div>
+        </div>
+        <div class="mock-panel tasks">
+          <h5>任务进度</h5>
+          <div class="mock-tasks">
+            <div class="mock-task"><i></i><em>首页改版评审</em><b>80%</b></div>
+            <div class="mock-task"><i></i><em>数据看板联调</em><b>45%</b></div>
+            <div class="mock-task"><i></i><em>用户访谈整理</em><b>20%</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

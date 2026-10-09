@@ -1,0 +1,166 @@
+/* ==========================================================================
+   绘职 AI — 设计令牌 (Design Tokens)
+   深色玻璃质感 / 紫罗兰主色 / 青绿-青色渐变 CTA
+   ========================================================================== */
+
+:root {
+  /* 背景层级 */
+  --bg:            #07070f;
+  --bg-2:          #0a0a16;
+  --panel:         #101021;
+  --panel-2:       #15152c;
+  --panel-hi:      #1b1b36;
+
+  /* 描边 */
+  --line:          rgba(255, 255, 255, .08);
+  --line-2:        rgba(255, 255, 255, .13);
+  --line-3:        rgba(255, 255, 255, .2);
+
+  /* 文字 */
+  --text:          #eceef7;
+  --text-2:        #a3a7c1;
+  --text-3:        #6c7194;
+  --text-4:        #4a4e6b;
+
+  /* 品牌色 */
+  --violet:        #6d5ae6;
+  --violet-2:      #8b7bff;
+  --violet-3:      #a896ff;
+  --violet-soft:   rgba(109, 90, 230, .16);
+  --violet-line:   rgba(139, 123, 255, .45);
+
+  --mint:          #5eead4;
+  --cyan:          #22d3ee;
+  --green:         #4ade80;
+  --amber:         #fbbf24;
+  --pink:          #f472b6;
+  --danger:        #f87171;
+
+  /* 渐变 */
+  --cta:           linear-gradient(96deg, #4ade80 0%, #34d9c0 45%, #22d3ee 100%);
+  --hero:          linear-gradient(96deg, #5eead4 0%, #a7f3e9 28%, #e9ebf6 74%);
+  --aurora:        radial-gradient(120% 90% at 50% -10%, rgba(109, 90, 230, .28) 0%, rgba(7, 7, 15, 0) 62%);
+
+  /* 圆角 */
+  --r-xs: 8px;
+  --r-s:  10px;
+  --r-m:  14px;
+  --r-l:  18px;
+  --r-xl: 24px;
+  --r-pill: 999px;
+
+  /* 阴影与光晕 */
+  --sh-1: 0 1px 0 rgba(255, 255, 255, .04) inset;
+  --sh-2: 0 20px 50px -26px rgba(0, 0, 0, .95);
+  --sh-cta: 0 12px 34px -10px rgba(34, 211, 238, .5), 0 6px 20px -8px rgba(74, 222, 128, .35);
+  --sh-violet: 0 0 0 1px var(--violet-line), 0 14px 40px -18px rgba(109, 90, 230, .75);
+
+  /* 字体 */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* 布局 */
+  --maxw: 1180px;
+  --gutter: 24px;
+
+  /* 动效 */
+  --ease: cubic-bezier(.22, .61, .36, 1);
+  --dur: .22s;
+}
+
+/* --------------------------------------------------------------- 基础重置 */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern" 1, "liga" 1;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, p, figure, blockquote, dl, dd { margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+
+img, svg, video { display: block; max-width: 100%; }
+
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a { color: inherit; text-decoration: none; }
+
+textarea { resize: none; }
+
+::selection {
+  background: rgba(139, 123, 255, .35);
+  color: #fff;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .1);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .2); background-clip: content-box; }
+
+/* 焦点可达性 */
+:focus-visible {
+  outline: 2px solid var(--violet-2);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* -------------------------------------------------------------- 通用工具类 */
+.wrap {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.is-hidden { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

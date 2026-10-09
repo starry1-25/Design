@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07070f">
+<title>历史记录 · 绘职 AI</title>
+<meta name="description" content="按时间轴回溯绘职 AI 的每一次生成与多轮微调记录，支持查看详情、下载与再次编辑。">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<div class="bg-grid" aria-hidden="true"></div>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="index.html">
+      <span class="brand-mark" data-icon="sparkle" aria-hidden="true"></span>
+      <span class="brand-name">绘职 <em>AI</em></span>
+    </a>
+    <nav class="nav-actions">
+      <a class="nav-link" href="history.html" data-icon="history">历史记录</a>
+      <a class="nav-link" href="settings.html" data-icon="sliders">设置</a>
+      <button class="nav-toggle" type="button" data-icon="menu" aria-label="打开菜单"></button>
+    </nav>
+  </div>
+  <div class="nav-sheet">
+    <a class="nav-link" href="history.html" data-icon="history">历史记录</a>
+    <a class="nav-link" href="settings.html" data-icon="sliders">设置</a>
+  </div>
+</header>
+
+<main class="page">
+  <section class="wrap page-head">
+    <h1 class="page-title">历史记录</h1>
+    <p class="page-desc">按时间轴回溯每一次生成与多轮微调，点开任意一条即可查看完整 Prompt 与对话上下文。</p>
+  </section>
+
+  <section class="wrap">
+    <div class="hist-bar">
+      <span class="hist-count" id="count">共 0 条记录</span>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" type="button" id="refresh"><span data-icon="refresh"></span><span>刷新</span></button>
+        <button class="btn is-danger" type="button" id="clearAll"><span data-icon="trash"></span><span>清空全部</span></button>
+      </div>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+
+<footer class="foot wrap">
+  <strong>绘职 AI</strong> · 让每个岗位，都有专属的视觉智能
+</footer>
+
+<div class="drawer-mask" id="mask"></div>
+
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="记录详情">
+  <div class="drawer-head">
+    <h3 id="drawerTitle">记录详情</h3>
+    <button class="ico-btn" type="button" id="drawerClose" data-icon="close"
+            aria-label="关闭" style="margin-left:auto"></button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-foot">
+    <button class="btn is-primary" type="button" id="drawerOpen">
+      <span data-icon="sparkle"></span><span>在生成器中打开</span></button>
+    <button class="btn" type="button" id="drawerDownload">
+      <span data-icon="download"></span><span>下载</span></button>
+    <button class="btn is-danger" type="button" id="drawerDelete" style="margin-left:auto">
+      <span data-icon="trash"></span><span>删除</span></button>
+  </div>
+</aside>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/history.js"></script>
+</body>
+</html>

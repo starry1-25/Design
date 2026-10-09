@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "updatedAt": "2026-10-09",
+  "roles": [
+    {
+      "id": "pm",
+      "index": "01",
+      "name": "产品经理",
+      "short": "PM",
+      "icon": "board",
+      "tagline": "把 PRD 变成可评审的 Dashboard",
+      "description": "Agent 将基于岗位经验理解你的需求",
+      "defaultRatio": "16:9",
+      "deliverable": "后台管理系统界面、经营数据看板、业务流程原型图；成品必须能直接放进 PRD 参与需求评审。",
+      "styleGuide": "信息层级优先：左侧导航 + 顶部上下文栏 + 指标卡区 + 图表区 + 列表区。数字要大而清晰，图表要一眼看出趋势。整体克制、专业、可交付，避免插画与装饰性元素。"
+    },
+    {
+      "id": "ixd",
+      "index": "02",
+      "name": "交互设计",
+      "short": "IXD",
+      "icon": "flow",
+      "tagline": "把任务链路画成可推演的流程图",
+      "description": "Agent 将基于岗位经验理解你的需求",
+      "defaultRatio": "16:9",
+      "deliverable": "交互流程图、页面线框图、组件状态图、任务链路示意。",
+      "styleGuide": "结构与路径优先：用线框与占位块表达元素位置，用箭头与泳道表达流转，用标注表达状态变化。弱化配色与质感，强调层级、间距、点击热区与信息密度。"
+    },
+    {
+      "id": "ui",
+      "index": "03",
+      "name": "UI 设计",
+      "short": "UI",
+      "icon": "palette",
+      "tagline": "直接产出高保真界面视觉稿",
+      "description": "Agent 将基于岗位经验理解你的需求",
+      "defaultRatio": "9:16",
+      "deliverable": "高保真 App / Web 界面视觉稿，含完整组件、状态与视觉规范。",
+      "styleGuide": "视觉精度优先：统一的色彩体系与语义色、明确的字号阶梯、一致的圆角与阴影、精致的图标与头像。完成度需达到 Dribbble / Behance 作品级。"
+    },
+    {
+      "id": "ops",
+      "index": "04",
+      "name": "运营设计",
+      "short": "OPS",
+      "icon": "megaphone",
+      "tagline": "快速产出活动主视觉与 Banner",
+      "description": "Agent 将基于岗位经验理解你的需求",
+      "defaultRatio": "9:16",
+      "deliverable": "活动主视觉、运营 Banner、营销落地页、开屏海报。",
+      "styleGuide": "冲击力优先：强对比构图、超大标题、强引导 CTA、促销利益点前置。可大量使用渐变、光效、场景化配图与立体元素，追求第一眼抓住注意力。"
+    },
+    {
+      "id": "fe",
+      "index": "05",
+      "name": "前端开发",
+      "short": "FE",
+      "icon": "code",
+      "tagline": "拿到带标注的 UI 结构与组件库",
+      "description": "Agent 将基于岗位经验理解你的需求",
+      "defaultRatio": "16:9",
+      "deliverable": "UI 结构参考、组件库总览、页面骨架与栅格标注、状态与响应式示意。",
+      "styleGuide": "落地性优先：清晰的栅格与间距标注、组件原子化展示、多状态并置（默认 / 悬停 / 禁用 / 加载 / 错误）、多断点响应式示意。整洁、模块化、工程可读。"
+    }
+  ],
+  "shared": {
+    "plannerTemplate": "你是「绘职 AI」的资深视觉总监兼 Prompt Engineer，专精 {roleName} 岗位的视觉产出。\n\n【本岗位交付物】\n{deliverable}\n\n【本岗位视觉规范】\n{styleGuide}\n\n【用户业务需求】\n{requirement}\n\n【输出画幅】\n{ratio}\n\n【本次随机创作种子】\n{seed}\n\n【随机创意方向池】\n{directions}\n\n【硬性规则】\n1. 只输出一个 JSON 对象。禁止 markdown 代码块、禁止任何解释性文字、禁止注释。\n2. JSON 字段如下：\n   title：中文视觉稿标题，不超过 14 个字。\n   summary：一句话复述你理解到的核心诉求，不超过 60 字。\n   visiblePrompt：面向用户展示的《业务 Prompt》，中文，200-320 字。只描述业务目标、画面与页面结构、核心组件、色彩、风格、画幅比例。严禁出现「你是」「提示词规则」「seed」「JSON」「system」等提示词工程措辞，也不要复述本段规则。\n   imagePrompt：驱动图像模型的英文专业 Prompt，300-450 个英文单词。必须写明：视觉稿类型、画幅比例 {ratio}、布局分区与栅格、组件清单及其状态、精确配色（写出 hex 色值）、字体气质、图标风格、圆角与留白、光影处理、渲染质量词（high fidelity UI mockup, crisp edges, clean typography, product screenshot, ultra detailed, 8k）。并要求画面内的文字仅为简短英文单词或占位线条，避免生成乱码、错别字与拼写错误。\n   agentReply：以视觉 Agent 的身份说明这一版的取舍与亮点，中文，不超过 80 字，不要客套与敬语堆砌。\n   keywords：4-6 个中文关键词组成的数组。\n3. imagePrompt 必须是纯英文，不得出现任何中文字符。\n4. 不得生成或暗示受版权保护的卡通角色、影视形象、明星肖像、企业商标。",
+    "refineTemplate": "你是「绘职 AI」的视觉 Agent，正在与用户多轮共创同一张视觉稿。你的唯一职责是「精确局部修改」。\n\n【岗位】{roleName}\n【本岗位视觉规范】\n{styleGuide}\n【画幅】{ratio}\n\n【当前生效的英文 imagePrompt】\n{currentPrompt}\n\n【当前对用户展示的中文业务 Prompt】\n{currentVisible}\n\n【本次会话上下文】\n{session}\n\n【用户本轮修改指令】\n{instruction}\n\n【核心约束 —— 违反即失败】\n1. 只修改用户明确提到的那部分。其余所有元素（布局分区、栅格、组件清单、配色 hex、字体、文案、画幅比例、光影、渲染质量词）必须逐字原样保留。\n2. 严禁顺手优化、严禁重新排版、严禁更换配色体系、严禁增删未被提及的组件。\n3. 若用户指令含糊，只做最小必要改动，并在 agentReply 中说明你的理解。\n4. 输出的 imagePrompt 必须是完整、可独立使用的版本，不是 diff，也不是片段。\n\n【输出】只输出一个 JSON 对象，禁止 markdown 代码块与解释文字，字段：\n   imagePrompt：修改后的完整英文 Prompt。\n   visiblePrompt：同步更新后的中文业务 Prompt，200-320 字，同样保持脱敏，不暴露提示词工程。\n   agentReply：中文，不超过 80 字，说明你改动了什么、其余部分如何保持不变。\n   changed：一句话中文摘要，说明本次的改动点。",
+    "variationDirections": [
+      "高密度信息流：首屏排布多个可读指标区块，信息量拉满",
+      "极简留白：大面积负空间，全屏只保留 3 个核心元素",
+      "玻璃拟态：半透明磨砂卡片叠加在渐变背景之上",
+      "新拟物：柔和双向投影，塑造凹凸的实体质感",
+      "暗色专业风：深色底 + 高饱和数据高亮",
+      "编辑部排版：超大标题与正文形成海报式强对比",
+      "卡片瀑布流：不等高卡片错落排布，打破规整网格",
+      "重型侧导航：导航区占据约四分之一画幅，内容区宽栏",
+      "顶部横向导航：取消侧栏，内容区全宽铺满",
+      "数据故事化：视觉中心放一个超大主指标配合环形进度",
+      "图表优先：柱状或折线图占据画面六成以上",
+      "分屏对比：左右各半，同屏对比两种方案",
+      "组件特写：聚焦单一组件的多状态并置展示",
+      "网格外露：显式绘制栅格线与间距标注",
+      "霓虹描边：深色底搭配荧光描边作为强调",
+      "低保真线框：手绘草图质感，突出结构而非质感"
+    ]
+  }
+}
